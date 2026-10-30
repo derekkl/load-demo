@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Load Demo Console</title>
+<style>
+  :root {
+    --bg: #151515; --panel: #1f1f1f; --panel2: #262626; --line: #3c3f42;
+    --text: #e0e0e0; --muted: #a3a3a3; --accent: #73bcf7;
+    --guarded: #4f9fe8; --wild: #f0a03c; --other: #9e86c8;
+    --ok: #5ba352; --warn: #f0ab00; --bad: #e0544a;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 14px/1.45 "Red Hat Text", "Segoe UI", system-ui, sans-serif; }
+  header { display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap;
+           padding: 14px 20px; border-bottom: 1px solid var(--line); background: #0f0f0f; }
+  header h1 { font-size: 18px; margin: 0; font-weight: 600; }
+  header .sub { color: var(--muted); font-size: 13px; }
+  header .spacer { flex: 1; }
+  main { padding: 16px 20px 40px; max-width: 1600px; margin: 0 auto; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted);
+       margin: 22px 0 10px; font-weight: 600; }
+  .banner { padding: 8px 12px; border-radius: 4px; background: #4a1c1a; border: 1px solid var(--bad);
+            margin-top: 12px; display: none; }
+  .grid { display: grid; gap: 12px; }
+  .teams { grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); }
+  .nodes { grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 14px; min-width: 0; }
+  .card.team { border-top: 3px solid var(--team-color, var(--other)); }
+  .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .title { font-weight: 600; font-size: 15px; }
+  .muted { color: var(--muted); }
+  .mono { font-family: var(--mono); font-size: 12px; }
+  .badge { font-size: 11px; padding: 1px 7px; border-radius: 10px; border: 1px solid var(--line);
+           background: var(--panel2); white-space: nowrap; }
+  .badge.ok { border-color: var(--ok); color: #9fd89a; }
+  .badge.warn { border-color: var(--warn); color: #ffd36a; }
+  .badge.bad { border-color: var(--bad); color: #ff9a92; background: #3a1816; }
+  .badge.info { border-color: var(--accent); color: var(--accent); }
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin: 10px 0; font-size: 13px; }
+  .kv dt { color: var(--muted); } .kv dd { margin: 0; font-family: var(--mono); font-size: 12px; }
+  .counts { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0 12px; }
+  .controls { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; align-items: end; }
+  label { display: block; font-size: 11px; color: var(--muted); margin-bottom: 3px; }
+  input[type=number] { width: 100%; background: #111; color: var(--text); border: 1px solid var(--line);
+                       border-radius: 4px; padding: 6px 8px; font: 13px var(--mono); }
+  button { background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 4px;
+           padding: 6px 10px; font: inherit; font-size: 13px; cursor: pointer; white-space: nowrap; }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: #0066cc; border-color: #0066cc; }
+  button.primary:hover { background: #004f9e; }
+  button.danger { border-color: #7a2c26; }
+  button.danger:hover { border-color: var(--bad); background: #3a1816; }
+  button:disabled { opacity: .45; cursor: default; }
+  .actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+  .hint { font-size: 12px; color: var(--warn); min-height: 18px; margin-top: 6px; }
+  .bar { margin: 6px 0; }
+  .bar .lbl { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+  .bar .lbl b { color: var(--text); font-weight: 500; font-family: var(--mono); font-size: 11.5px; }
+  .track { height: 8px; background: #111; border-radius: 4px; overflow: hidden; border: 1px solid #2c2c2c; }
+  .fill { height: 100%; background: var(--accent); transition: width .6s; }
+  .fill.req { background: #6a7f94; }
+  .fill.hot { background: var(--warn); } .fill.crit { background: var(--bad); }
+  .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 10px; min-height: 18px; }
+  .chip { width: 16px; height: 16px; border-radius: 3px; background: var(--c); border: 2px solid var(--c); }
+  .chip.notready { background: transparent; }
+  .chip.crash { border-color: var(--bad); background: repeating-linear-gradient(45deg, var(--c) 0 3px, #3a1816 3px 6px); }
+  .chip.term { opacity: .35; }
+  .chip.oomhist { box-shadow: 0 0 0 2px #151515, 0 0 0 3px var(--bad); }
+  .card.node.cordoned { background: repeating-linear-gradient(135deg, var(--panel) 0 12px, #1a1a1a 12px 24px); }
+  .card.node.pressure { border-color: var(--bad); box-shadow: 0 0 0 1px var(--bad) inset; }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+  .legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .legend .chip { width: 12px; height: 12px; }
+  .cols { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 12px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid #2c2c2c; vertical-align: top; }
+  th { color: var(--muted); font-weight: 500; position: sticky; top: 0; background: var(--panel); }
+  td.mono, td .mono { font-family: var(--mono); font-size: 11.5px; }
+  .scroll { max-height: 340px; overflow: auto; }
+  .ev-reason { color: #ffd36a; font-weight: 500; }
+  details summary { cursor: pointer; color: var(--muted); margin: 18px 0 8px; }
+  .pending-msg { font-size: 12px; color: #ffd36a; margin-top: 8px; font-family: var(--mono); word-break: break-word; }
+  @media (max-width: 900px) { .cols { grid-template-columns: 1fr; } .teams { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Load Demo Console</h1>
+  <span class="sub">Same app, two teams — one with requests, limits, quota &amp; PDB; one with none.</span>
+  <span class="spacer"></span>
+  <span class="sub" id="updated">connecting…</span>
+</header>
+<main>
+  <div class="banner" id="banner"></div>
+
+  <h2>Teams</h2>
+  <div class="grid teams" id="teams"></div>
+
+  <h2>Worker nodes</h2>
+  <div class="legend">
+    <span><i class="chip" style="--c:var(--guarded)"></i> team-guarded</span>
+    <span><i class="chip" style="--c:var(--wild)"></i> team-wild</span>
+    <span><i class="chip notready" style="--c:var(--muted)"></i> not ready</span>
+    <span><i class="chip crash" style="--c:var(--muted)"></i> crashing / OOM</span>
+    <span><i class="chip oomhist" style="--c:var(--muted)"></i> running, was OOMKilled before</span>
+    <span><i class="chip term" style="--c:var(--muted)"></i> terminating</span>
+    <span>bars: grey = requested (what the scheduler sees), colour = actual usage</span>
+  </div>
+  <div class="grid nodes" id="nodes"></div>
+
+  <div class="cols">
+    <div>
+      <h2>Warning events (team namespaces)</h2>
+      <div class="card scroll"><table><thead><tr><th>Time</th><th>Reason</th><th>Object</th><th>Message</th></tr></thead>
+        <tbody id="events"></tbody></table></div>
+    </div>
+    <div>
+      <h2>Console activity</h2>
+      <div class="card scroll"><table><tbody id="activity"></tbody></table></div>
+    </div>
+  </div>
+
+  <details>
+    <summary>All demo pods</summary>
+    <div class="card scroll" style="max-height:520px"><table>
+      <thead><tr><th>Pod</th><th>Node</th><th>Status</th><th>QoS</th><th>Restarts</th><th>Last exit</th><th>CPU</th><th>Mem</th></tr></thead>
+      <tbody id="pods"></tbody></table></div>
+  </details>
+</main>
+
+<script>
+const TEAM_COLORS = { "team-guarded": "var(--guarded)", "team-wild": "var(--wild)" };
+const PRESETS = [
+  { label: "Idle",   cpu_m: 0,    mem_mb: 0 },
+  { label: "Normal", cpu_m: 400,  mem_mb: 768 },
+  { label: "Heavy",  cpu_m: 1000, mem_mb: 1536 },
+  { label: "Huge",   cpu_m: 2000, mem_mb: 3072 },
+];
+let state = null;
+
+const $ = (s, el = document) => el.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const color = ns => TEAM_COLORS[ns] || "var(--other)";
+const gib = b => b == null ? "–" : (b / 2 ** 30).toFixed(1);
+const cores = c => c == null ? "–" : c.toFixed(c < 10 ? 2 : 1);
+const short = n => n.replace(/^.*-worker-/, "");
+const ago = iso => { if (!iso) return ""; const s = Math.max(0, (Date.now() - Date.parse(iso)) / 1000);
+  return s < 90 ? `${Math.round(s)}s` : s < 5400 ? `${Math.round(s / 60)}m` : `${Math.round(s / 3600)}h`; };
+const tago = ts => ago(new Date(ts * 1000).toISOString());
+
+function qtyMi(s) { // memory quantity -> MiB
+  if (!s) return null; const m = /^([\d.]+)(Ki|Mi|Gi|Ti|k|M|G)?$/.exec(s); if (!m) return null;
+  const mult = { Ki: 1 / 1024, Mi: 1, Gi: 1024, Ti: 1048576, k: 1e3 / 1048576, M: 1e6 / 1048576, G: 1e9 / 1048576 }[m[2]] ?? 1 / 1048576;
+  return parseFloat(m[1]) * mult;
+}
+function qtyM(s) { // cpu quantity -> millicores
+  if (!s) return null; return s.endsWith("m") ? parseFloat(s) : parseFloat(s) * 1000;
+}
+
+async function post(path, body) {
+  const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok && r.status !== 202) alert(`${path} failed (${r.status}): ${j.message || ""}`);
+  refresh();
+  return j;
+}
+
+// ---------------------------------------------------------------- teams
+function ensureTeamCard(d) {
+  const id = "team-" + d.key.replace(/[^a-z0-9]/gi, "_");
+  let el = document.getElementById(id);
+  if (el) return el;
+  el = document.createElement("div");
+  el.className = "card team"; el.id = id; el.style.setProperty("--team-color", color(d.ns));
+  el.innerHTML = `
+    <div class="row"><span class="title">${esc(d.name)}</span><span class="muted mono">${esc(d.ns)}</span>
+      <span class="spacer" style="flex:1"></span><span class="badge" data-f="qos"></span></div>
+    <dl class="kv"><dt>Requests</dt><dd data-f="req"></dd><dt>Limits</dt><dd data-f="lim"></dd>
+      <dt>Load / pod</dt><dd data-f="load"></dd><dt>Replicas</dt><dd data-f="reps"></dd></dl>
+    <div class="counts" data-f="counts"></div>
+    <div class="controls">
+      <div><label>Replicas</label><input type="number" min="0" data-i="replicas"></div>
+      <div><label>CPU per pod (millicores)</label><input type="number" min="0" step="100" data-i="cpu"></div>
+      <div><label>Memory per pod (MiB)</label><input type="number" min="0" step="128" data-i="mem"></div>
+    </div>
+    <div class="actions">
+      <button data-a="scale">Scale</button>
+      <button class="primary" data-a="load">Apply load</button>
+      <span style="flex:1"></span>
+      ${PRESETS.map((p, i) => `<button data-preset="${i}" title="cpu ${p.cpu_m}m, mem ${p.mem_mb}Mi">${p.label}</button>`).join("")}
+    </div>
+    <div class="hint" data-f="hint"></div>`;
+  $("[data-i=replicas]", el).value = d.replicas;
+  $("[data-i=cpu]", el).value = d.desired.cpu_m;
+  $("[data-i=mem]", el).value = d.desired.mem_mb;
+  $("[data-a=scale]", el).onclick = () => post("/api/scale", { ns: d.ns, name: d.name, replicas: +$("[data-i=replicas]", el).value });
+  $("[data-a=load]", el).onclick = () => post("/api/load", { key: d.key, cpu_m: +$("[data-i=cpu]", el).value, mem_mb: +$("[data-i=mem]", el).value });
+  el.querySelectorAll("[data-preset]").forEach(b => b.onclick = () => {
+    const p = PRESETS[+b.dataset.preset];
+    $("[data-i=cpu]", el).value = p.cpu_m; $("[data-i=mem]", el).value = p.mem_mb;
+    post("/api/load", { key: d.key, cpu_m: p.cpu_m, mem_mb: p.mem_mb });
+  });
+  el.querySelectorAll("input").forEach(i => i.oninput = () => updateHint(el, d));
+  $("#teams").appendChild(el);
+  return el;
+}
+
+function updateHint(el, d) {
+  const cpu = +$("[data-i=cpu]", el).value, mem = +$("[data-i=mem]", el).value, reps = +$("[data-i=replicas]", el).value;
+  const lc = qtyM(d.limits.cpu), lm = qtyMi(d.limits.memory), rc = qtyM(d.requests.cpu), rm = qtyMi(d.requests.memory);
+  const msgs = [];
+  if (lm && mem + 40 > lm) msgs.push(`memory ${mem}Mi + runtime exceeds the ${d.limits.memory} limit → pods will be OOMKilled`);
+  if (lc && cpu > lc) msgs.push(`CPU ${cpu}m > ${d.limits.cpu} limit → throttled to the limit`);
+  if (!d.requests.memory && mem) msgs.push(`no requests: the scheduler thinks these pods need nothing (actual ≈ ${(mem * reps / 1024).toFixed(1)} GiB total)`);
+  else if (rm && mem > rm) msgs.push(`using more memory than requested`);
+  $("[data-f=hint]", el).textContent = msgs.join(" · ");
+}
+
+function renderTeams(deps) {
+  const seen = new Set();
+  for (const d of deps) {
+    const el = ensureTeamCard(d); seen.add(el.id);
+    const q = $("[data-f=qos]", el); q.textContent = d.qos;
+    q.className = "badge " + (d.qos === "Guaranteed" ? "ok" : d.qos === "BestEffort" ? "bad" : "warn");
+    const fmt = o => Object.keys(o).length ? Object.entries(o).map(([k, v]) => `${k}=${v}`).join("  ") : "none";
+    $("[data-f=req]", el).textContent = fmt(d.requests);
+    $("[data-f=lim]", el).textContent = fmt(d.limits);
+    $("[data-f=load]", el).textContent = `cpu=${d.desired.cpu_m}m  mem=${d.desired.mem_mb}Mi`;
+    $("[data-f=reps]", el).textContent = `${d.ready} ready / ${d.replicas} desired`;
+    const c = d.counts, parts = [`<span class="badge ok">${c.running} running</span>`];
+    if (c.pending) parts.push(`<span class="badge warn">${c.pending} pending</span>`);
+    if (c.crashing) parts.push(`<span class="badge bad">${c.crashing} crashing</span>`);
+    if (c.oomRestarts) parts.push(`<span class="badge bad">${c.oomRestarts} OOM restarts</span>`);
+    if (c.evicted) parts.push(`<span class="badge bad">${c.evicted} evicted by kubelet</span>`);
+    $("[data-f=counts]", el).innerHTML = parts.join("");
+    const ri = $("[data-i=replicas]", el); if (document.activeElement !== ri && !ri.dataset.dirty) ri.value = d.replicas;
+    updateHint(el, d);
+  }
+  document.querySelectorAll("#teams > .card").forEach(el => { if (!seen.has(el.id)) el.remove(); });
+}
+
+// ---------------------------------------------------------------- nodes
+function bar(label, val, max, fmt, cls) {
+  const pct = max ? Math.min(100, (val ?? 0) / max * 100) : 0;
+  const heat = cls === "req" ? "req" : pct > 90 ? "crit" : pct > 75 ? "hot" : "";
+  return `<div class="bar"><div class="lbl"><span>${label}</span><b>${fmt(val)} / ${fmt(max)} (${val == null ? "–" : pct.toFixed(0)}%)</b></div>
+    <div class="track"><div class="fill ${heat}" style="width:${pct}%"></div></div></div>`;
+}
+
+function chip(p) {
+  const cls = ["chip"];
+  if (p.status === "Terminating") cls.push("term");
+  else if (/CrashLoop|OOM|Error|Evicted/.test(p.status)) cls.push("crash");
+  else if (!p.ready) cls.push("notready");
+  if (p.lastReason === "OOMKilled" && !cls.includes("crash")) cls.push("oomhist");
+  const tip = `${p.ns}/${p.name}\n${p.status}${p.ready ? " (ready)" : ""} · ${p.qos}\nrestarts ${p.restarts}${p.lastReason ? " · last: " + p.lastReason : ""}` +
+    (p.memUse != null ? `\nmem ${(p.memUse / 2 ** 20).toFixed(0)}Mi · cpu ${(p.cpuUse * 1000).toFixed(0)}m` : "");
+  return `<i class="${cls.join(" ")}" style="--c:${color(p.ns)}" title="${esc(tip)}"></i>`;
+}
+
+function renderNodes(nodes, pods) {
+  const byNode = {};
+  for (const p of pods) (byNode[p.node] = byNode[p.node] || []).push(p);
+  const html = nodes.map(n => {
+    const mine = (byNode[n.name] || []).filter(p => p.status !== "Evicted");
+    const badges = [`<span class="badge">${esc(n.zone)}</span>`];
+    if (!n.ready) badges.push(`<span class="badge bad">NotReady</span>`);
+    if (n.memPressure) badges.push(`<span class="badge bad">MemoryPressure</span>`);
+    if (n.draining) badges.push(`<span class="badge info">draining…</span>`);
+    else if (n.cordoned) badges.push(`<span class="badge warn">cordoned</span>`);
+    const g = mine.filter(p => p.ns === "team-guarded").length, w = mine.filter(p => p.ns === "team-wild").length;
+    return `<div class="card node ${n.cordoned ? "cordoned" : ""} ${n.memPressure ? "pressure" : ""}">
+      <div class="row"><span class="title mono" title="${esc(n.name)}">${esc(short(n.name))}</span>${badges.join("")}</div>
+      ${bar("CPU requested", n.cpuReq, n.cpuAlloc, cores, "req")}
+      ${bar("CPU used", n.cpuUse, n.cpuAlloc, cores)}
+      ${bar("Mem requested (GiB)", n.memReq, n.memAlloc, gib, "req")}
+      ${bar("Mem used (GiB)", n.memUse, n.memAlloc, gib)}
+      <div class="row muted" style="font-size:12px;margin-top:6px">${n.pods} pods total · demo: ${g} guarded, ${w} wild</div>
+      <div class="chips">${mine.map(chip).join("")}</div>
+      <div class="actions">
+        ${n.cordoned ? `<button data-uncordon="${esc(n.name)}">Uncordon</button>` : `<button data-cordon="${esc(n.name)}">Cordon</button>`}
+        <button class="danger" data-drain="${esc(n.name)}" ${n.draining ? "disabled" : ""}>Drain demo pods</button>
+      </div></div>`;
+  });
+  const pending = byNode[""] || [];
+  if (pending.length) {
+    const msg = (pending.find(p => p.schedMsg) || {}).schedMsg || "";
+    html.push(`<div class="card node" style="border-style:dashed;border-color:var(--warn)">
+      <div class="row"><span class="title">Unscheduled</span><span class="badge warn">${pending.length} pending</span></div>
+      <div class="chips">${pending.map(chip).join("")}</div>
+      ${msg ? `<div class="pending-msg">${esc(msg)}</div>` : ""}</div>`);
+  }
+  $("#nodes").innerHTML = html.join("");
+  document.querySelectorAll("[data-cordon]").forEach(b => b.onclick = () => post("/api/cordon", { node: b.dataset.cordon, on: true }));
+  document.querySelectorAll("[data-uncordon]").forEach(b => b.onclick = () => post("/api/cordon", { node: b.dataset.uncordon, on: false }));
+  document.querySelectorAll("[data-drain]").forEach(b => b.onclick = () => {
+    if (confirm(`Cordon ${short(b.dataset.drain)} and evict all demo pods from it?\n(Only demo pods are evicted; PDBs are honoured.)`))
+      post("/api/drain", { node: b.dataset.drain });
+  });
+}
+
+// ---------------------------------------------------------------- tables
+function renderTables(s) {
+  $("#events").innerHTML = s.events.map(e => `<tr><td class="mono">${ago(e.ts)}</td>
+    <td class="ev-reason">${esc(e.reason)}${e.count > 1 ? ` ×${e.count}` : ""}</td>
+    <td class="mono">${esc(e.obj)}</td><td>${esc(e.msg)}</td></tr>`).join("") ||
+    `<tr><td class="muted">No warning events yet.</td></tr>`;
+  $("#activity").innerHTML = s.activity.map(a => `<tr><td class="mono" style="width:48px">${tago(a.ts)}</td><td>${esc(a.msg)}</td></tr>`).join("");
+  $("#pods").innerHTML = s.pods.map(p => `<tr><td class="mono"><i class="chip" style="--c:${color(p.ns)};display:inline-block;width:9px;height:9px;margin-right:6px"></i>${esc(p.name)}</td>
+    <td class="mono">${esc(p.node ? short(p.node) : "—")}</td><td>${esc(p.status)}${p.ready ? "" : " (not ready)"}</td>
+    <td>${esc(p.qos)}</td><td>${p.restarts}</td><td>${esc(p.lastReason)}</td>
+    <td class="mono">${p.cpuUse == null ? "–" : (p.cpuUse * 1000).toFixed(0) + "m"}</td>
+    <td class="mono">${p.memUse == null ? "–" : (p.memUse / 2 ** 20).toFixed(0) + "Mi"}</td></tr>`).join("");
+}
+
+// ---------------------------------------------------------------- loop
+async function refresh() {
+  try {
+    const r = await fetch("/api/state", { cache: "no-store" });
+    state = await r.json();
+    const banner = $("#banner");
+    if (!state.ok) { banner.style.display = "block"; banner.textContent = "Console cannot read cluster state: " + (state.error || "unknown"); return; }
+    banner.style.display = "none";
+    renderTeams(state.deployments);
+    renderNodes(state.nodes, state.pods);
+    renderTables(state);
+    $("#updated").textContent = "updated " + new Date(state.ts * 1000).toLocaleTimeString();
+  } catch (e) {
+    $("#updated").textContent = "console unreachable – retrying";
+  }
+}
+refresh();
+setInterval(refresh, 3000);
+</script>
+</body>
+</html>
